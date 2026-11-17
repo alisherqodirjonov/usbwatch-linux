@@ -26,7 +26,7 @@ class TreeWatcher(threading.Thread):
         self.wds, self.created, self.moves, self.last_mod, self.scanned = {}, {}, {}, {}, {}
         self.files, self.limited, self.error = 0, False, ""
 
-    # ---- helpers ----
+    # --- helpers ---
     def skipped(self, path):
         rel = os.path.relpath(path, self.root)
         return any(fnmatch.fnmatch(part, pat) for part in rel.split(os.sep) for pat in self.skip)
@@ -95,7 +95,7 @@ class TreeWatcher(threading.Thread):
         if not self.stopping.is_set():
             self.on_index(files)
 
-    # ---- event handling ----
+    # --- event handling ---
     def handle(self, wd, mask, cookie, name):
         t = time.time()
         if mask & K.IN_Q_OVERFLOW:

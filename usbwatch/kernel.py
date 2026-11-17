@@ -40,7 +40,7 @@ def _oserror(what):
     return OSError(e, "%s: %s" % (what, os.strerror(e)))
 
 
-# ---------------------------------------------------------------- inotify
+# --- inotify ---
 IN_MODIFY, IN_CLOSE_WRITE, IN_MOVED_FROM, IN_MOVED_TO = 0x2, 0x8, 0x40, 0x80
 IN_CREATE, IN_DELETE, IN_DELETE_SELF, IN_MOVE_SELF = 0x100, 0x200, 0x400, 0x800
 IN_UNMOUNT, IN_Q_OVERFLOW, IN_IGNORED = 0x2000, 0x4000, 0x8000
@@ -98,7 +98,7 @@ def inotify_limit():
         return 0
 
 
-# ---------------------------------------------------------------- fanotify
+# --- fanotify ---
 FAN_CLASS_NOTIF, FAN_CLOEXEC, FAN_NONBLOCK, FAN_UNLIMITED_QUEUE = 0x0, 0x1, 0x2, 0x10
 FAN_MARK_ADD, FAN_MARK_REMOVE, FAN_MARK_MOUNT = 0x1, 0x2, 0x10
 FAN_MODIFY, FAN_CLOSE_WRITE, FAN_CLOSE_NOWRITE, FAN_OPEN_EXEC = 0x2, 0x8, 0x10, 0x1000
@@ -177,7 +177,7 @@ class Fanotify:
             self.fd = -1
 
 
-# ---------------------------------------------------------------- netlink uevents
+# --- netlink uevents ---
 NETLINK_KOBJECT_UEVENT = 15
 
 
@@ -210,7 +210,7 @@ class UeventListener(threading.Thread):
                     break
 
 
-# ---------------------------------------------------------------- processes
+# --- processes ---
 _UNSET_LOGINUID = 4294967295
 _users = {}
 

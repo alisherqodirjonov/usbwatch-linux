@@ -78,7 +78,7 @@ class Config:
     def getlist(self, sec, key):
         return _split(self.get(sec, key))
 
-    # ---- derived paths ----
+    # --- derived paths ---
     @property
     def data_dir(self):
         return self.get("paths", "data_dir")
@@ -95,7 +95,7 @@ class Config:
     def vault_dir(self):
         return os.path.join(self.data_dir, "vault")
 
-    # ---- web exposure ----
+    # --- web exposure ---
     def bind_addresses(self):
         return self.getlist("web", "bind") or ["127.0.0.1"]
 

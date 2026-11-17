@@ -1,3 +1,5 @@
+<p align="center"><img src="icon/usbwatch.jpg" alt="USBWatch" width="120"></p>
+
 # USBWatch for Linux
 
 A standalone USB auditing tool for Linux. It logs every USB device plugged in and everything done with
@@ -97,7 +99,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) to allow remote access.
 ## Development
 
 ```bash
-make test        # 27 unit/integration tests, no root needed
+make test        # unit and integration tests, no root needed
 make lint        # byte-compile + sh -n on every shell script
 make run-dev     # daemon + console from the source tree (no root: no blocking/attribution)
 ```

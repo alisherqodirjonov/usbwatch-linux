@@ -44,7 +44,7 @@ def _db(cfg, must_exist=True):
         sys.exit("Cannot open %s: %s (try sudo)" % (cfg.db_path, e))
 
 
-# ------------------------------------------------------------------ services
+# --- services ---
 def cmd_daemon(a):
     from . import daemon
     if os.geteuid() != 0:
@@ -57,7 +57,7 @@ def cmd_web(a):
     return web.main(_cfg(a), user=a.user)
 
 
-# ------------------------------------------------------------------ setup
+# --- setup ---
 def _chown(path, uid, gid, mode):
     try:
         os.chown(path, uid, gid)
@@ -168,7 +168,7 @@ def cmd_userdel(a):
     return 0 if n else 1
 
 
-# ------------------------------------------------------------------ status / queries
+# --- status / queries ---
 def cmd_status(a):
     cfg = _cfg(a)
     c = _db(cfg)
@@ -307,7 +307,7 @@ def cmd_open(a):
     return 0
 
 
-# ------------------------------------------------------------------ doctor
+# --- doctor ---
 def _kernel_tuple():
     import re
     m = re.match(r"(\d+)\.(\d+)", platform.release())
@@ -390,7 +390,7 @@ def cmd_doctor(a):
     return 1 if any(r[0] == "FAIL" for r in results) else 0
 
 
-# ------------------------------------------------------------------ main
+# --- main ---
 def main(argv=None):
     if sys.version_info[:2] < MIN_PYTHON:
         sys.exit("USBWatch needs Python %d.%d or newer." % MIN_PYTHON)

@@ -98,7 +98,7 @@ def one(c, sql, args=()):
     return dict(r) if r else None
 
 
-# ---------- settings / state ----------
+# --- settings / state ---
 def get_setting(c, k):
     r = c.execute("SELECT v FROM settings WHERE k=?", (k,)).fetchone()
     return r[0] if r else DEFAULTS[k][0]
@@ -170,7 +170,7 @@ def bump(c, k):
     set_state(c, k, str(int(get_state(c, k, "0") or 0) + 1))
 
 
-# ---------- users / passwords ----------
+# --- users / passwords ---
 def hash_pw(pw, salt_hex):
     return hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), bytes.fromhex(salt_hex), PBKDF2_ROUNDS).hex()
 
@@ -200,7 +200,7 @@ def audit(c, who, action, detail="", ip=""):
               (time.time(), who, ip, action, (detail or "")[:2000]))
 
 
-# ---------- events ----------
+# --- events ---
 EVENT_FIELDS = ("ts", "epoch", "category", "action", "direction", "serial", "mount", "path", "dest", "size",
                 "user", "login", "process", "pid", "cmdline", "sha256", "detail")
 

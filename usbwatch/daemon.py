@@ -101,7 +101,7 @@ class Daemon:
             self.syslog.addHandler(h)
             self.syslog.setLevel(logging.INFO)
 
-    # ================================================================ events
+    # --- events ---
     def event(self, category, action, **kw):
         t = time.time()
         e = {"ts": db.now_str(t), "epoch": t, "category": category, "action": action}
@@ -248,7 +248,7 @@ class Daemon:
             for line in lines:
                 self.syslog.info(line)
 
-    # ================================================================ bookkeeping
+    # --- bookkeeping ---
     def track(self, evs):
         """Keep the per-drive file index current, remember devices and schedule vault copies / hashes."""
         c, vault_on, hmax = self.db, self.settings["vault_on"], self.settings["hash_max_mb"]
@@ -355,7 +355,7 @@ class Daemon:
             except OSError:
                 pass
 
-    # ================================================================ policy
+    # --- policy ---
     def load_policy(self, force=False):
         rev = db.get_state(self.db, "policy_rev", "0")
         if rev == self.policy_rev and not force:
@@ -431,7 +431,7 @@ class Daemon:
             self.db.commit()
         return ok
 
-    # ================================================================ devices
+    # --- devices ---
     def upsert_device(self, d, connected=True):
         c, ts = self.db, db.now_str()
         cls = ",".join(d.get("classes", []))
@@ -499,7 +499,7 @@ class Daemon:
                     self.block(dev)
         self.db.commit()
 
-    # ================================================================ mounts
+    # --- mounts ---
     def poll_mounts(self):
         cur = sysusb.mounted_roots()
         for m in [m for m in self.mounts if m not in cur]:
@@ -557,7 +557,7 @@ class Daemon:
             self.db.execute("UPDATE devices SET total=?, label=?, fs=? WHERE serial=?",
                             (total, info["label"], info["fs"], info["serial"]))
 
-    # ================================================================ commands
+    # --- commands ---
     def run_commands(self):
         for cid, cmd, args in self.db.execute("SELECT id,cmd,args FROM commands WHERE done IS NULL ORDER BY id").fetchall():
             try:
@@ -601,7 +601,7 @@ class Daemon:
                    size=os.path.getsize(dest), detail="from recovery vault")
         return True, "restored to %s" % dest
 
-    # ================================================================ history / housekeeping
+    # --- history / housekeeping ---
     def history_thread(self):
         try:
             c = db.connect(self.cfg.db_path)
@@ -658,7 +658,7 @@ class Daemon:
         db.set_state(self.db, "daemon", st)
         self.db.commit()
 
-    # ================================================================ main loop
+    # --- main loop ---
     def tick(self):
         self.tick_n += 1
         t = time.time()

@@ -190,7 +190,7 @@ def in_scope(dev, scope):
     return bool(dev.get("storage"))
 
 
-# ---------- blocking ----------
+# --- blocking ---
 def blockable(handle):
     return bool(handle) and handle.startswith("/sys/devices/") and \
         os.path.exists(os.path.join(handle, "authorized")) and not os.path.basename(handle).startswith("usb")
@@ -213,7 +213,7 @@ def set_enabled(handle, enable):
         return False
 
 
-# ---------- device history (kernel log) ----------
+# --- device history (kernel log) ---
 _RX = re.compile(r"kernel:\s+(?:\[\s*[\d.]+\]\s+)?(usb|usb-storage|uas) (\d+-[\d.]+)(?::[\d.]+)?: (.*)$")
 
 
@@ -302,7 +302,7 @@ def history():
     return list(devs.values())
 
 
-# ---------- misc ----------
+# --- misc ---
 def logged_in_users():
     try:
         r = subprocess.run(["who"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,

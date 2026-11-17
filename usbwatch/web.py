@@ -72,7 +72,7 @@ class App:
             c = self.local.c = db.connect(self.cfg.db_path)
         return c
 
-    # ---- network policy ----
+    # --- network policy ---
     def client_allowed(self, ip):
         try:
             a = ipaddress.ip_address(ip.split("%", 1)[0])
@@ -92,7 +92,7 @@ class App:
             h = h.split(":", 1)[0]
         return h in self.hosts
 
-    # ---- throttling ----
+    # --- throttling ---
     def throttle(self, ip, fail=False):
         t = time.time()
         with self.fail_lock:
@@ -153,7 +153,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def ip(self):
         return self.client_address[0]
 
-    # ---- responses ----
+    # --- responses ---
     def _headers(self, status, ctype, length, extra=None):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
@@ -183,7 +183,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
-    # ---- request plumbing ----
+    # --- request plumbing ---
     def body(self):
         n = int(self.headers.get("Content-Length") or 0)
         if n > MAX_BODY:
@@ -245,7 +245,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     do_GET = do_POST = do_PUT = do_DELETE = do_HEAD = handle_any
 
-    # ---- routing ----
+    # --- routing ---
     def route(self, method, path, q):
         if method in ("GET", "HEAD"):
             if path in ("/", "/index.html"):
@@ -286,7 +286,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         db.audit(c, user, action, detail, self.ip)
         c.commit()
 
-    # ---- auth ----
+    # --- auth ---
     def login(self):
         self.csrf()
         self.app.throttle(self.ip)
@@ -333,7 +333,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.audit(user, "changed password")
         self.send_json({"ok": True})
 
-    # ---- data ----
+    # --- data ---
     def daemon_state(self, c):
         try:
             st = json.loads(db.get_state(c, "daemon", "{}"))
