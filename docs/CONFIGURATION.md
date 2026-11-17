@@ -5,7 +5,7 @@
 | Where | Who can change it | What |
 |---|---|---|
 | `/etc/usbwatch/usbwatch.conf` (root:usbwatch, 0640) | root only | paths, logging, **web console exposure** (bind, allow-list, host names, TLS, session time, lock-out), monitor tuning |
-| Console → Settings / Access Control (stored in the database) | signed-in console users | policy mode and scope, whitelist/blacklist, read/exec logging, read de-duplication, processes to ignore, SHA-256 hashing, recovery vault, retention |
+| Console → USB drives / Settings (stored in the database) | signed-in console users | policy mode, allowed/blocked drives, read/exec logging, read de-duplication, processes to ignore, SHA-256 hashing, recovery vault, retention |
 
 After you edit the file, restart the services:
 `sudo systemctl restart usbwatch usbwatch-web`, or `rc-service ... restart`, or `service ... restart`.
@@ -59,7 +59,7 @@ Passwords need at least 10 characters. Changing a password signs that user out e
 
 - **Vault** (off by default): files written to a USB drive are copied to `/var/lib/usbwatch/vault`, which
   only root can read, within a per-file and a total size limit. When the oldest copies push the total over
-  the limit, they are deleted. Deleted files can then be restored from **Deleted Files** while the drive is
+  the limit, they are deleted. Deleted files can then be restored from **Activity → Deleted** while the drive is
   plugged in. Restores never overwrite: the restored copy gets a "(restored)" suffix.
 - **SHA-256** (off by default; 0 MB): files written to USB up to the given size are hashed, and the hash is
   stored with the event and shown in CSV exports. This helps match a leaked file to a transfer.
@@ -68,7 +68,7 @@ Passwords need at least 10 characters. Changing a password signs that user out e
 
 Desktop indexers and thumbnailers read every file on a newly mounted drive. The default ignore list
 (Settings → Monitoring) covers GNOME tracker/localsearch, KDE baloo, gvfs, tumbler, updatedb and similar
-tools. Add any others that show up in **Transfers** as unwanted reads. Process names are matched against
+tools. Add any others that show up in **Activity → Read from USB** as unwanted reads. Process names are matched against
 the kernel's 15-character `comm` name and the executable's file name. A file read repeatedly by the same
 process is reported once per de-duplication window (30 s by default).
 

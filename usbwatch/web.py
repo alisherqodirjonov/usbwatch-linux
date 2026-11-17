@@ -348,41 +348,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def summary(self, _user, _q):
         c, t = self.app.conn(), time.time()
         count = lambda sql, a=(): c.execute(sql, a).fetchone()[0]
-        attached = db.rows(c, "SELECT a.handle, a.serial, a.ts, d.name, d.vid, d.pid, d.classes, d.storage, "
-                              "b.ts blocked, p.kind list FROM attached a LEFT JOIN devices d ON d.serial=a.serial "
-                              "LEFT JOIN blocked b ON b.serial=a.serial LEFT JOIN policy p ON p.serial=a.serial "
-                              "ORDER BY a.ts DESC")
+        drives = db.rows(c, "SELECT a.serial, a.ts since, d.name, d.total size, m.mount, m.label, m.fs, m.total, "
+                            "m.free, m.files, m.watched, b.ts blocked, p.kind list FROM attached a "
+                            "JOIN devices d ON d.serial=a.serial LEFT JOIN mounts m ON m.serial=a.serial "
+                            "LEFT JOIN blocked b ON b.serial=a.serial LEFT JOIN policy p ON p.serial=a.serial "
+                            "WHERE d.storage=1 ORDER BY a.ts DESC, m.mount")
         self.send_json({
-            "mode": db.get_setting(c, "mode"), "scope": db.get_setting(c, "policy_scope"),
-            "devices": count("SELECT COUNT(*) FROM devices"),
-            "storage_devices": count("SELECT COUNT(*) FROM devices WHERE storage=1"),
-            "events_24h": count("SELECT COUNT(*) FROM events WHERE epoch>?", (t - 86400,)),
+            "mode": db.get_setting(c, "mode"),
             "to_usb_24h": count("SELECT COUNT(*) FROM events WHERE epoch>? AND direction='to USB'", (t - 86400,)),
             "from_usb_24h": count("SELECT COUNT(*) FROM events WHERE epoch>? AND direction='from USB'", (t - 86400,)),
             "deleted_24h": count("SELECT COUNT(*) FROM events WHERE epoch>? AND action LIKE 'Deleted%'", (t - 86400,)),
-            "blocked": count("SELECT COUNT(*) FROM blocked"), "attached": attached,
-            "mounts": db.rows(c, "SELECT m.*, d.name FROM mounts m LEFT JOIN devices d ON d.serial=m.serial ORDER BY mount"),
-            "alerts": db.rows(c, "SELECT e.*, d.name device FROM events e LEFT JOIN devices d ON d.serial=e.serial "
-                                 "WHERE e.action IN ('Blocked','Block failed','Unblock failed','Watch limit',"
-                                 "'Event overflow') ORDER BY e.id DESC LIMIT 10"),
-            "recent": self._events({"limit": "15", "category": "file"})["rows"],
+            "drives": drives,
+            "recent": self._events({"limit": "10", "category": "file"})["rows"],
             "daemon": self.daemon_state(c),
         })
 
-    def devices(self, _user, q):
-        c = self.app.conn()
-        where, args = "", []
-        if q.get("q"):
-            where = "WHERE d.serial LIKE ? OR d.name LIKE ? OR d.vid LIKE ? OR d.pid LIKE ?"
-            args = ["%" + q["q"] + "%"] * 4
-        if q.get("storage") == "1":
-            where = (where + " AND " if where else "WHERE ") + "d.storage=1"
-        rows = db.rows(c, "SELECT d.*, p.kind list, p.name list_name, b.ts blocked, "
-                          "(SELECT COUNT(*) FROM attached a WHERE a.serial=d.serial) connected, "
-                          "(SELECT COUNT(*) FROM events e WHERE e.serial=d.serial AND e.category='file') file_events "
-                          "FROM devices d LEFT JOIN policy p ON p.serial=d.serial "
-                          "LEFT JOIN blocked b ON b.serial=d.serial %s ORDER BY d.last DESC" % where, args)
-        self.send_json(rows)
+    def devices(self, _user, _q):
+        """Every USB drive seen so far (other USB devices are not shown)."""
+        self.send_json(db.rows(self.app.conn(),
+                               "SELECT d.*, p.kind list, b.ts blocked, "
+                               "(SELECT COUNT(*) FROM attached a WHERE a.serial=d.serial) connected "
+                               "FROM devices d LEFT JOIN policy p ON p.serial=d.serial "
+                               "LEFT JOIN blocked b ON b.serial=d.serial WHERE d.storage=1 ORDER BY d.last DESC"))
 
     def _filter(self, q):
         where, args = ["1=1"], []
@@ -417,7 +404,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             args.append(int(q["before"]))
         return " AND ".join(where), args
 
-    EVENT_SQL = "SELECT e.*, d.name device FROM events e LEFT JOIN devices d ON d.serial=e.serial WHERE "
+    # Events of USB devices that are not drives (recorded by older versions) are left out.
+    EVENT_SQL = ("SELECT e.*, d.name device FROM events e LEFT JOIN devices d ON d.serial=e.serial "
+                 "WHERE (e.serial='' OR d.serial IS NULL OR d.storage=1) AND ")
 
     def _events(self, q):
         w, args = self._filter(q)

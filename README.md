@@ -55,23 +55,23 @@ browse and export events from the console (filters, CSV export) or from the comm
 
 ```bash
 usbwatch events -n 100            # latest events     (-f to follow, --json / --csv to export)
-usbwatch devices                  # every USB device ever seen, including kernel-log history
+usbwatch devices                  # every USB drive ever seen, including kernel-log history
 usbwatch status                   # service health, policy, mounted drives
 sudo usbwatch doctor              # check this machine against the requirements
 ```
 
 ## Access control
 
-You set this up on the console's **Access Control** page:
+You set this up on the console's **USB drives** page:
 
-- **Off** logs only.
-- **Blacklist** blocks the listed devices.
-- **Whitelist only** blocks every device in scope that is not on the whitelist.
+- **Allow all** logs only.
+- **Block listed** blocks the drives you mark as blocked.
+- **Allow listed only** blocks every USB drive that is not marked as allowed.
 
-The scope can be USB mass storage, mass storage plus phones and cameras (MTP/PTP), or all USB devices.
-Keyboards and mice are blocked only when the scope is "all". Blocking deauthorizes the device in the
-kernel through sysfs. The kernel's netlink uevent wakes the service the moment a device appears, so
-blocking happens within milliseconds, before the desktop mounts the drive.
+USBWatch only tracks and controls USB drives (mass storage). Keyboards, mice, webcams, Bluetooth adapters
+and other USB devices, including the ones built into laptops, are ignored. Blocking deauthorizes the drive in
+the kernel through sysfs. The kernel's netlink uevent wakes the service the moment a drive appears, so
+blocking happens within milliseconds, before the desktop mounts it.
 
 **Emergency:** `sudo usbwatch unblock-all` sets the policy to Off and re-enables every blocked device.
 

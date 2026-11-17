@@ -104,12 +104,9 @@ class SysusbTest(unittest.TestCase):
         mouse = {"storage": False, "hid": True, "hub": False, "mtp": False}
         phone = {"storage": False, "hid": False, "hub": False, "mtp": True}
         hub = {"storage": False, "hid": False, "hub": True, "mtp": False}
-        self.assertTrue(sysusb.in_scope(storage, "storage"))
-        self.assertFalse(sysusb.in_scope(mouse, "storage+mtp"))
-        self.assertTrue(sysusb.in_scope(mouse, "all"))
-        self.assertFalse(sysusb.in_scope(phone, "storage"))
-        self.assertTrue(sysusb.in_scope(phone, "storage+mtp"))
-        self.assertFalse(sysusb.in_scope(hub, "all"))
+        self.assertTrue(sysusb.in_scope(storage))
+        for other in (mouse, phone, hub):              # only USB drives are ever blocked
+            self.assertFalse(sysusb.in_scope(other))
 
     def test_blockable_rejects_outside_sysfs(self):
         self.assertFalse(sysusb.blockable("/etc"))

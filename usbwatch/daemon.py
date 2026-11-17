@@ -81,7 +81,7 @@ class Daemon:
         self.writers, self.read_seen, self.pending = {}, {}, []
         self.vault_jobs, self.vault_done, self.vault_pending = queue.Queue(), queue.Queue(), {}
         self.settings = db.typed_settings(self.db)
-        self.policy = {"mode": "off", "scope": "storage", "allow": set(), "block": set()}
+        self.policy = {"mode": "off", "allow": set(), "block": set()}
         self.policy_rev = None
         self.ignore = set()
         self.fan, self.fan_error, self.uevent = None, "", None
@@ -367,15 +367,15 @@ class Daemon:
         allow, block = set(), set()
         for serial, kind in self.db.execute("SELECT serial,kind FROM policy"):
             (allow if kind == "allow" else block).add(serial.upper())
-        new = {"mode": self.settings["mode"], "scope": self.settings["policy_scope"], "allow": allow, "block": block}
+        new = {"mode": self.settings["mode"], "allow": allow, "block": block}
         changed = new != self.policy
         self.policy = new
         if not changed and not first:
             return
         if not first:
-            log.info("policy: mode=%s scope=%s allow=%d block=%d", new["mode"], new["scope"], len(allow), len(block))
-            self.event("policy", "Policy applied", detail="mode=%s scope=%s whitelist=%d blacklist=%d" %
-                       (new["mode"], new["scope"], len(allow), len(block)))
+            log.info("policy: mode=%s allow=%d block=%d", new["mode"], len(allow), len(block))
+            self.event("policy", "Policy applied", detail="mode=%s whitelist=%d blacklist=%d" %
+                       (new["mode"], len(allow), len(block)))
         self.enforce_all()
 
     def allowed(self, serial):
@@ -387,7 +387,7 @@ class Daemon:
         return True
 
     def must_block(self, dev):
-        return sysusb.in_scope(dev, self.policy["scope"]) and not self.allowed(dev["serial"])
+        return sysusb.in_scope(dev) and not self.allowed(dev["serial"])
 
     def enforce_all(self):
         for h, dev in list(self.attached.items()):
@@ -471,9 +471,12 @@ class Daemon:
         t = time.time()
         if startup:
             known = dict(self.db.execute("SELECT handle,serial FROM attached").fetchall())
+            drives = {r[0] for r in self.db.execute("SELECT serial FROM devices WHERE storage=1")}
             for h, serial in known.items():
                 if h not in cur or cur[h]["serial"] != serial:
                     self.db.execute("DELETE FROM attached WHERE handle=?", (h,))
+                    if serial not in drives:           # not a USB drive (recorded by an older version)
+                        continue
                     self.db.execute("UPDATE devices SET removed=? WHERE serial=?", (db.now_str(), serial))
                     self.event("device", "Disconnected", serial=serial, path=h,
                                detail="removed while USBWatch was not running")
@@ -605,7 +608,7 @@ class Daemon:
     def history_thread(self):
         try:
             c = db.connect(self.cfg.db_path)
-            devs = sysusb.history()
+            devs = [d for d in sysusb.history() if d["storage"]]
             for d in devs:
                 r = c.execute("SELECT first FROM devices WHERE serial=?", (d["serial"],)).fetchone()
                 if not r:
@@ -625,7 +628,7 @@ class Daemon:
             db.set_state(c, "history", {"ts": time.time(), "devices": len(devs)})
             c.commit()
             c.close()
-            log.info("device history: %d devices found in the kernel log", len(devs))
+            log.info("device history: %d USB drives found in the kernel log", len(devs))
         except Exception:
             log.exception("history")
         finally:

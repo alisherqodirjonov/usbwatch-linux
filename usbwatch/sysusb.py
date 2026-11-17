@@ -159,8 +159,12 @@ def describe(real):
     }
 
 
-def usb_devices():
-    """{sysfs path: description} for every attached USB device (root hubs and interfaces skipped)."""
+def usb_devices(storage_only=True):
+    """{sysfs path: description} for attached USB drives (mass storage).
+
+    Laptops expose many internal parts over USB (webcam, Bluetooth, fingerprint reader, sometimes the
+    keyboard), so everything else is skipped unless storage_only is False.
+    """
     out = {}
     for d in glob.glob(SYS_USB + "/*"):
         b = os.path.basename(d)
@@ -169,7 +173,10 @@ def usb_devices():
         real = os.path.realpath(d)
         if not os.path.exists(real + "/idVendor"):
             continue
-        out[real] = describe(real)
+        dev = describe(real)
+        if storage_only and not dev["storage"]:
+            continue
+        out[real] = dev
     return out
 
 
@@ -177,17 +184,9 @@ def class_names(classes):
     return ", ".join(USB_CLASSES.get(c, "class " + c) for c in classes)
 
 
-def in_scope(dev, scope):
-    """Does the access-control policy apply to this device?"""
-    if dev.get("hub"):
-        return False
-    if scope == "all":
-        return True
-    if dev.get("hid") and not dev.get("storage"):    # never lock out keyboards / mice unless scope is 'all'
-        return False
-    if scope == "storage+mtp":
-        return bool(dev.get("storage") or dev.get("mtp"))
-    return bool(dev.get("storage"))
+def in_scope(dev):
+    """Does the access-control policy apply to this device? Only USB drives are ever blocked."""
+    return bool(dev.get("storage")) and not dev.get("hub")
 
 
 # --- blocking ---

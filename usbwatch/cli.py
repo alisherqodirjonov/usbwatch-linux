@@ -8,7 +8,7 @@
   usbwatch passwd [USER]          set a console password (creates the user if needed)
   usbwatch users | userdel USER   list / remove console accounts
   usbwatch events [-n N] [-f]     print recent events (add --json or --csv)
-  usbwatch devices                list known USB devices
+  usbwatch devices                list known USB drives
   usbwatch unblock-all            emergency: policy off and re-enable every blocked device
   usbwatch open                   open the console in a browser
 """
@@ -189,14 +189,15 @@ def cmd_status(a):
         print("  netlink   : %s" % st.get("netlink"))
         print("  watches   : %s of %s" % (st.get("watches"), st.get("inotify_limit")))
     s = db.typed_settings(c)
-    print("Policy      : mode=%s scope=%s whitelist=%d blacklist=%d" % (
-        s["mode"], s["policy_scope"], c.execute("SELECT COUNT(*) FROM policy WHERE kind='allow'").fetchone()[0],
+    print("Policy      : mode=%s whitelist=%d blacklist=%d" % (
+        s["mode"], c.execute("SELECT COUNT(*) FROM policy WHERE kind='allow'").fetchone()[0],
         c.execute("SELECT COUNT(*) FROM policy WHERE kind='block'").fetchone()[0]))
     print("Console     : %s://%s:%d/  (allow: %s)" % ("https" if cfg.get("web", "tls_cert") else "http",
                                                    cfg.bind_addresses()[0], cfg.getint("web", "port"),
                                                    ", ".join(cfg.getlist("web", "allow"))))
-    print("Devices     : %d known, %d connected, %d blocked" % (
-        c.execute("SELECT COUNT(*) FROM devices").fetchone()[0], c.execute("SELECT COUNT(*) FROM attached").fetchone()[0],
+    print("Drives      : %d known, %d connected, %d blocked" % (
+        c.execute("SELECT COUNT(*) FROM devices WHERE storage=1").fetchone()[0],
+        c.execute("SELECT COUNT(*) FROM attached a JOIN devices d ON d.serial=a.serial WHERE d.storage=1").fetchone()[0],
         c.execute("SELECT COUNT(*) FROM blocked").fetchone()[0]))
     for m in db.rows(c, "SELECT * FROM mounts"):
         print("  mounted   : %s  %s  %s  %s" % (m["mount"], m["label"] or "-", m["fs"], m["serial"]))
@@ -256,16 +257,15 @@ def cmd_events(a):
 def cmd_devices(a):
     c = _db(_cfg(a))
     rows = db.rows(c, "SELECT d.*, p.kind list, (SELECT COUNT(*) FROM attached x WHERE x.serial=d.serial) connected "
-                      "FROM devices d LEFT JOIN policy p ON p.serial=d.serial ORDER BY d.last DESC")
+                      "FROM devices d LEFT JOIN policy p ON p.serial=d.serial WHERE d.storage=1 ORDER BY d.last DESC")
     if a.json:
         print(json.dumps(rows, indent=1, ensure_ascii=False))
         return 0
-    print("%-32s %-9s %-34s %-7s %-19s %-19s %s" % ("SERIAL", "VID:PID", "NAME", "STORAGE", "FIRST", "LAST", "STATE"))
+    print("%-32s %-9s %-34s %-19s %-19s %s" % ("SERIAL", "VID:PID", "NAME", "FIRST", "LAST", "STATE"))
     for r in rows:
         state = ("connected " if r["connected"] else "") + ({"allow": "whitelisted", "block": "blacklisted"}.get(r["list"]) or "")
-        print("%-32s %-9s %-34s %-7s %-19s %-19s %s" % (r["serial"][:32], "%s:%s" % (r["vid"], r["pid"]),
-                                                       (r["name"] or "")[:34], "yes" if r["storage"] else "",
-                                                       r["first"] or "", r["last"] or "", state))
+        print("%-32s %-9s %-34s %-19s %-19s %s" % (r["serial"][:32], "%s:%s" % (r["vid"], r["pid"]),
+                                                  (r["name"] or "")[:34], r["first"] or "", r["last"] or "", state))
     return 0
 
 
@@ -278,7 +278,7 @@ def cmd_unblock_all(a):
     for serial, handle in c.execute("SELECT serial, handle FROM blocked").fetchall():
         n += sysusb.set_enabled(handle, True)
     c.execute("DELETE FROM blocked")
-    for h, dev in sysusb.usb_devices().items():         # also anything deauthorized outside our records
+    for h, dev in sysusb.usb_devices(storage_only=False).items():   # also anything deauthorized outside our records
         if not dev["authorized"] and sysusb.set_enabled(h, True):
             n += 1
     db.audit(c, "cli", "unblock-all", "policy mode set to off, %d device(s) re-enabled" % n)
@@ -421,7 +421,7 @@ def main(argv=None):
     e.add_argument("--serial")
     e.add_argument("--json", action="store_true")
     e.add_argument("--csv", action="store_true")
-    d = sub.add_parser("devices", help="list known USB devices")
+    d = sub.add_parser("devices", help="list known USB drives")
     d.add_argument("--json", action="store_true")
     sub.add_parser("unblock-all", help="policy off + re-enable every blocked USB device (root)")
     sub.add_parser("open", help="open the web console in a browser").set_defaults()

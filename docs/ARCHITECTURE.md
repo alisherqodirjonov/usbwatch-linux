@@ -61,8 +61,7 @@ to write outside those places.
 ## Limitations
 
 - Deletes and renames are not attributed to a process. Attributing them needs fanotify directory events,
-  which require kernel 5.1+ with FID reporting and are not implemented. Events from the same moment, and the
-  logged-in users on the Overview, usually make the author clear.
+  which require kernel 5.1+ with FID reporting and are not implemented. Events from the same moment usually make the author clear.
 - Reads are file opens without writes. Previews and antivirus scans also count. Use the ignore list.
 - Huge drives can exceed `fs.inotify.max_user_watches`. The console then shows **Watch limit**. Raise the
   limit with `sysctl fs.inotify.max_user_watches=524288`, and make it persistent in `/etc/sysctl.d/`.

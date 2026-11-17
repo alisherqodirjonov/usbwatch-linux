@@ -22,6 +22,13 @@ class WebTest(unittest.TestCase):
                             "user": "alice", "process": "cp", "pid": 1})
         db.insert_event(c, {"ts": db.now_str(), "epoch": time.time(), "category": "file", "action": "Deleted",
                             "serial": "ABC", "mount": "/media/u/STICK", "path": "/media/u/STICK/old.txt"})
+        # one USB drive and one mouse are plugged in; only the drive should be visible
+        c.execute("INSERT INTO devices(serial,name,storage,last) VALUES('ABC','Stick',1,'2026-01-01 00:00:00')")
+        c.execute("INSERT INTO devices(serial,name,storage,last) VALUES('MOUSE1','Mouse',0,'2026-01-01 00:00:00')")
+        c.execute("INSERT INTO attached VALUES('/sys/devices/x/1-1','ABC','2026-01-01 00:00:00')")
+        c.execute("INSERT INTO attached VALUES('/sys/devices/x/1-2','MOUSE1','2026-01-01 00:00:00')")
+        db.insert_event(c, {"ts": db.now_str(), "epoch": time.time(), "category": "device", "action": "Connected",
+                            "serial": "MOUSE1"})
         c.commit()
         c.close()
         cls.app = web.App(cls.cfg)
@@ -90,11 +97,16 @@ class WebTest(unittest.TestCase):
         st, s, _c, _r = self.req("GET", "/api/summary", cookie=ck)
         self.assertEqual(st, 200)
         self.assertEqual(s["to_usb_24h"], 1)
+        self.assertEqual([d["serial"] for d in s["drives"]], ["ABC"])
+        st, devs, _c, _r = self.req("GET", "/api/devices", cookie=ck)
+        self.assertEqual([d["serial"] for d in devs], ["ABC"])          # the mouse is not listed
         st, ev, _c, _r = self.req("GET", "/api/events?q=secret&direction=to%20USB", cookie=ck)
         self.assertEqual(len(ev["rows"]), 1)
         self.assertEqual(ev["rows"][0]["user"], "alice")
         st, ev, _c, _r = self.req("GET", "/api/events?direction=both", cookie=ck)
         self.assertEqual(len(ev["rows"]), 1)
+        st, ev, _c, _r = self.req("GET", "/api/events?category=device", cookie=ck)
+        self.assertEqual(ev["rows"], [])                                # mouse events are hidden
         st, csvb, _c, r = self.req("GET", "/api/events.csv", cookie=ck)
         self.assertEqual(st, 200)
         self.assertIn(b"secret.docx", csvb)

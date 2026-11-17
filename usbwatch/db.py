@@ -43,7 +43,6 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, 
 """
 
 MODES = ("off", "blacklist", "whitelist")
-SCOPES = ("storage", "storage+mtp", "all")
 DEFAULT_IGNORE = ("tracker-miner-fs, tracker-miner-fs-3, tracker-extract, tracker-extract-3, localsearch-3, "
                   "localsearch-extractor-3, gvfsd-metadata, gvfs-udisks2-volume-monitor, baloo_file, "
                   "baloo_file_extractor, nautilus-thumbnailer, gnome-thumbnail-factory, ffmpegthumbnailer, "
@@ -52,7 +51,6 @@ DEFAULT_IGNORE = ("tracker-miner-fs, tracker-miner-fs-3, tracker-extract, tracke
 # UI-editable settings: key -> (default, kind, lo, hi)
 DEFAULTS = {
     "mode": ("off", "choice", MODES, None),
-    "policy_scope": ("storage", "choice", SCOPES, None),
     "vault_on": ("0", "bool", None, None),
     "vault_max_mb": ("100", "int", 1, 10240),
     "vault_cap_gb": ("5", "int", 1, 10240),
