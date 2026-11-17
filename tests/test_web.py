@@ -29,6 +29,10 @@ class WebTest(unittest.TestCase):
         c.execute("INSERT INTO attached VALUES('/sys/devices/x/1-2','MOUSE1','2026-01-01 00:00:00')")
         db.insert_event(c, {"ts": db.now_str(), "epoch": time.time(), "category": "device", "action": "Connected",
                             "serial": "MOUSE1"})
+        # service and configuration events are not drive activity
+        db.insert_event(c, {"ts": db.now_str(), "epoch": time.time(), "category": "system", "action": "Service started"})
+        db.insert_event(c, {"ts": db.now_str(), "epoch": time.time(), "category": "policy", "action": "Policy applied",
+                            "detail": "mode=blacklist"})
         c.commit()
         c.close()
         cls.app = web.App(cls.cfg)
@@ -107,6 +111,8 @@ class WebTest(unittest.TestCase):
         self.assertEqual(len(ev["rows"]), 1)
         st, ev, _c, _r = self.req("GET", "/api/events?category=device", cookie=ck)
         self.assertEqual(ev["rows"], [])                                # mouse events are hidden
+        st, ev, _c, _r = self.req("GET", "/api/events", cookie=ck)
+        self.assertEqual(sorted(r["action"] for r in ev["rows"]), ["Created", "Deleted"])   # drive activity only
         st, csvb, _c, r = self.req("GET", "/api/events.csv", cookie=ck)
         self.assertEqual(st, 200)
         self.assertIn(b"secret.docx", csvb)

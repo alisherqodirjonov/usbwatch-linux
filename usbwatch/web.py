@@ -404,9 +404,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             args.append(int(q["before"]))
         return " AND ".join(where), args
 
-    # Events of USB devices that are not drives (recorded by older versions) are left out.
+    # The console shows USB drive activity only: every such event names the drive's serial. Service and
+    # policy-change events have none (console changes are in the audit log instead), and events of USB
+    # devices that are not drives (recorded by older versions) are left out too.
     EVENT_SQL = ("SELECT e.*, d.name device FROM events e LEFT JOIN devices d ON d.serial=e.serial "
-                 "WHERE (e.serial='' OR d.serial IS NULL OR d.storage=1) AND ")
+                 "WHERE e.serial<>'' AND (d.serial IS NULL OR d.storage=1) AND ")
 
     def _events(self, q):
         w, args = self._filter(q)
