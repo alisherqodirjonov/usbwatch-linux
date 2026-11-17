@@ -1,0 +1,12 @@
+#!/bin/sh
+# Self-contained: the package's own files are already gone when this runs.
+set +e
+if [ "$1" = purge ]; then
+    rm -rf /var/lib/usbwatch /var/log/usbwatch /etc/usbwatch
+    getent passwd usbwatch >/dev/null 2>&1 && deluser --quiet --system usbwatch 2>/dev/null || userdel usbwatch 2>/dev/null
+    getent group usbwatch >/dev/null 2>&1 && delgroup --quiet --system usbwatch 2>/dev/null || groupdel usbwatch 2>/dev/null
+fi
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+    [ -d /run/systemd/system ] && systemctl daemon-reload
+fi
+exit 0

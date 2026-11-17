@@ -1,0 +1,47 @@
+# Shared body of the USBWatch SysV init scripts. Expects NAME and ARGS.
+# shellcheck shell=sh
+BIN=@BINDIR@/usbwatch
+PIDFILE=/run/$NAME.pid
+LOG=/var/log/usbwatch/$NAME.out
+
+running() {
+    [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+do_start() {
+    if running; then echo "$NAME is already running"; return 0; fi
+    [ -x "$BIN" ] || { echo "$BIN missing"; return 5; }
+    mkdir -p /var/log/usbwatch
+    printf 'Starting %s... ' "$NAME"
+    # respawn loop: restart the service 3 s after it exits, until the loop itself is stopped
+    (
+        umask 007
+        trap 'kill "$child" 2>/dev/null; exit 0' TERM INT
+        while :; do
+            "$BIN" $ARGS >>"$LOG" 2>&1 &
+            child=$!
+            wait "$child"
+            sleep 3
+        done
+    ) </dev/null >/dev/null 2>&1 &
+    echo $! > "$PIDFILE"
+    echo "ok"
+}
+
+do_stop() {
+    if ! running; then echo "$NAME is not running"; rm -f "$PIDFILE"; return 0; fi
+    printf 'Stopping %s... ' "$NAME"
+    kill "$(cat "$PIDFILE")" 2>/dev/null
+    i=0
+    while running && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+    rm -f "$PIDFILE"
+    echo "ok"
+}
+
+case "$1" in
+    start) do_start ;;
+    stop) do_stop ;;
+    restart|force-reload) do_stop; do_start ;;
+    status) if running; then echo "$NAME is running"; exit 0; else echo "$NAME is stopped"; exit 3; fi ;;
+    *) echo "Usage: $0 {start|stop|restart|status}"; exit 2 ;;
+esac

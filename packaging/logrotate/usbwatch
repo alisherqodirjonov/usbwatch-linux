@@ -1,0 +1,10 @@
+/var/log/usbwatch/events.jsonl /var/log/usbwatch/*.out {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 root usbwatch
+}

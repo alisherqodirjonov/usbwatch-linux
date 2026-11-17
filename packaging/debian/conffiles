@@ -1,0 +1,5 @@
+/etc/usbwatch/usbwatch.conf
+/etc/init.d/usbwatch
+/etc/init.d/usbwatch-web
+/etc/init.d/usbwatch-common
+/etc/logrotate.d/usbwatch

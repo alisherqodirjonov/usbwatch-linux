@@ -1,0 +1,23 @@
+[Unit]
+Description=USBWatch - USB device and file activity monitor
+Documentation=file:@DOCDIR@/README.md
+After=local-fs.target systemd-udevd.service
+Before=udisks2.service
+
+[Service]
+Type=simple
+ExecStart=@BINDIR@/usbwatch daemon
+Restart=always
+RestartSec=3
+UMask=0007
+# Root is required: sysfs 'authorized' writes (blocking) and fanotify (process attribution).
+# No mount-namespace sandboxing on purpose: the daemon must see every USB mount the desktop creates.
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

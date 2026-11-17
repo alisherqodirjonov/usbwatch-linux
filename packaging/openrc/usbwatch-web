@@ -1,0 +1,21 @@
+#!/sbin/openrc-run
+# USBWatch web console (OpenRC)
+
+name="usbwatch-web"
+description="USBWatch web console"
+command="@BINDIR@/usbwatch"
+command_args="web --user usbwatch"
+command_user="usbwatch:usbwatch"
+command_background="yes"
+pidfile="/run/usbwatch-web.pid"
+umask=0007
+output_log="/var/log/usbwatch/web.out"
+error_log="/var/log/usbwatch/web.out"
+supervisor="supervise-daemon"
+respawn_delay=3
+respawn_max=0
+
+depend() {
+    need net localmount
+    after usbwatch
+}

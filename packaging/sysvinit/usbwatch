@@ -1,0 +1,16 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          usbwatch
+# Required-Start:    $local_fs $syslog
+# Required-Stop:     $local_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: USBWatch USB device and file activity monitor
+### END INIT INFO
+# SysV init script (Devuan, Slackware, older distributions without systemd/OpenRC).
+# The daemon is kept alive by a small respawn loop.
+
+NAME=usbwatch
+ARGS="daemon"
+RUNAS=root
+. "$(dirname "$0")/usbwatch-common" 2>/dev/null || . /etc/init.d/usbwatch-common

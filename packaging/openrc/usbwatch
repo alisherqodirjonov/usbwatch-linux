@@ -1,0 +1,21 @@
+#!/sbin/openrc-run
+# USBWatch monitoring daemon (OpenRC: Alpine, Gentoo, Artix, Devuan-openrc)
+
+name="usbwatch"
+description="USBWatch - USB device and file activity monitor"
+command="@BINDIR@/usbwatch"
+command_args="daemon"
+command_background="yes"
+pidfile="/run/usbwatch.pid"
+umask=0007
+output_log="/var/log/usbwatch/daemon.out"
+error_log="/var/log/usbwatch/daemon.out"
+supervisor="supervise-daemon"
+respawn_delay=3
+respawn_max=0
+
+depend() {
+    need localmount
+    after udev udev-trigger
+    before udisks2
+}

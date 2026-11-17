@@ -1,0 +1,41 @@
+[Unit]
+Description=USBWatch web console
+Documentation=file:@DOCDIR@/README.md
+After=network.target usbwatch.service
+Wants=usbwatch.service
+
+[Service]
+Type=simple
+User=usbwatch
+Group=usbwatch
+ExecStart=@BINDIR@/usbwatch web --user usbwatch
+Restart=always
+RestartSec=3
+UMask=0007
+# Unknown directives are ignored (with a warning) by older systemd versions.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ReadWritePaths=@DATADIR@
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

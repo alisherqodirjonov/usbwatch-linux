@@ -1,0 +1,17 @@
+Package: usbwatch
+Version: @VERSION@
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.6), adduser | passwd
+Recommends: logrotate
+Maintainer: USBWatch maintainers <root@localhost>
+Installed-Size: @SIZE@
+Homepage: file:///usr/share/doc/usbwatch/README.md
+Description: USB device and file activity auditor with a local web console
+ Logs every USB device plugged in (serial, VID:PID, vendor, product, class),
+ every USB filesystem mounted, and all file activity on USB drives: files
+ written to and read from the drive, deleted, renamed and executed, with the
+ user and process responsible. Optional whitelist/blacklist blocking,
+ recovery vault and SHA-256 hashing. Pure Python, no extra dependencies;
+ the web console listens on localhost only by default and requires sign-in.

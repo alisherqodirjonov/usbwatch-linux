@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=USBWatch
+GenericName=USB Activity Monitor
+Comment=Open the USBWatch console (USB devices and file activity)
+Exec=@BINDIR@/usbwatch open
+Icon=drive-removable-media
+Terminal=false
+Categories=System;Security;Monitor;
+Keywords=usb;audit;security;dlp;

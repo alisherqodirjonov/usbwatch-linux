@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|deconfigure) /usr/lib/usbwatch/pkg-prerm.sh remove ;;
+    upgrade|failed-upgrade) /usr/lib/usbwatch/pkg-prerm.sh upgrade ;;
+esac
+exit 0
