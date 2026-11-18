@@ -1,1 +1,40 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build + packaging output
+build/
+dist/
+*.egg-info/
+*.deb
+*.rpm
+*.run
+*.tar.gz
+
+# Local dev data (run-dev writes here)
+devdata/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets / credentials
 creds.console
+initial-admin-password
+
+# Logs
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

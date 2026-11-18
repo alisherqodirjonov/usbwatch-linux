@@ -378,26 +378,35 @@ class Daemon:
                        (new["mode"], len(allow), len(block)))
         self.enforce_all()
 
-    def allowed(self, serial):
-        p, s = self.policy, (serial or "").upper()
-        if p["mode"] in ("blacklist", "whitelist") and s in p["block"]:
+    def allowed(self, dev):
+        """A device matches a policy row if its serial matches OR its VID:PID-model key matches."""
+        p = self.policy
+        keys = {(dev.get("serial") or "").upper(),
+                sysusb.vidpid_key(dev.get("vid", ""), dev.get("pid", ""))}
+        keys.discard("")
+        if p["mode"] in ("blacklist", "whitelist") and (keys & p["block"]):
             return False
         if p["mode"] == "whitelist":
-            return s in p["allow"]
+            return bool(keys & p["allow"])
         return True
 
     def must_block(self, dev):
-        return sysusb.in_scope(dev) and not self.allowed(dev["serial"])
+        return sysusb.in_scope(dev) and not self.allowed(dev)
 
     def enforce_all(self):
         for h, dev in list(self.attached.items()):
             if dev.get("authorized", True) and self.must_block(dev):
                 self.block(dev)
-        for serial, handle in self.db.execute("SELECT serial,handle FROM blocked").fetchall():
-            dev = self.attached.get(handle)
+        by_serial = {}
+        for d in self.attached.values():
+            by_serial.setdefault(d["serial"], d)        # a reinserted device shows up under a new handle
+        for row in self.db.execute("SELECT serial FROM blocked").fetchall():
+            serial = row[0]
+            dev = by_serial.get(serial)
             if dev is None:
                 self.db.execute("DELETE FROM blocked WHERE serial=?", (serial,))
             elif not self.must_block(dev):
+                handle = dev["handle"]
                 ok = sysusb.set_enabled(handle, True)
                 self.event("policy", "Unblocked" if ok else "Unblock failed", serial=serial, path=handle,
                            detail=dev.get("name", ""))
@@ -420,11 +429,39 @@ class Daemon:
             why = "cannot identify this device in sysfs"
         elif not sysusb.is_root():
             why = "the daemon needs root rights"
+        # Tear any live mounts off the device first, otherwise authorized=0 leaves the mount
+        # serving cached data and the UI block looks like it did nothing.
+        unmounted, unmount_failed, dropped = [], [], []
+        found_mounts = []
+        if not why:
+            found_mounts = sysusb.mountpoints_for_serial(serial)
+            for m in found_mounts:
+                if sysusb.force_unmount(m):
+                    unmounted.append(m)
+                    self._drop_mount(m, serial, "forced on block")
+                else:
+                    unmount_failed.append(m)
+            # On some kernels authorized=0 alone does not remove /dev/sdX; this guarantees it.
+            dropped = sysusb.scsi_delete(h)
         ok = not why and sysusb.set_enabled(h, False)
+        if ok:
+            sysusb.poweroff_port(h)
         if not ok and not why:
             why = "the kernel refused to deauthorize the device"
+        tag = "mode " + self.policy["mode"] if ok else why
+        parts = []
+        if found_mounts:
+            parts.append("mounts=" + ",".join(found_mounts))
+        else:
+            parts.append("mounts=none")
+        if unmounted:
+            parts.append("unmounted=" + ",".join(unmounted))
+        if unmount_failed:
+            parts.append("umount-failed=" + ",".join(unmount_failed))
+        if dropped:
+            parts.append("dropped=" + ",".join(dropped))
         self.event("policy", "Blocked" if ok else "Block failed", serial=serial, mount=mount, path=h,
-                   detail=(dev.get("name", "") + " - " + ("mode " + self.policy["mode"] if ok else why)).strip(" -"))
+                   detail=(dev.get("name", "") + " - " + tag + "; " + "; ".join(parts)).strip(" -"))
         if ok:
             dev["authorized"] = False
             self.db.execute("INSERT OR REPLACE INTO blocked VALUES(?,?,?)", (serial, h, db.now_str()))
@@ -504,6 +541,13 @@ class Daemon:
 
     # --- mounts ---
     def poll_mounts(self):
+        # Reap ghost mounts: mount records whose /dev/sdX is gone (left over from a lazy umount).
+        for src, m, fs in sysusb.ghost_mounts():
+            if sysusb.force_unmount(m):
+                self.event("volume", "Unmounted", mount=m, path=m,
+                           detail="reaped ghost mount (source %s no longer exists, fs=%s)" % (src, fs))
+                if m in self.mounts:
+                    self._drop_mount(m, self.mounts[m].get("serial", ""), "ghost mount reaped")
         cur = sysusb.mounted_roots()
         for m in [m for m in self.mounts if m not in cur]:
             info = self.mounts.pop(m)
@@ -527,8 +571,12 @@ class Daemon:
             dev = self.attached.get(info["handle"]) or sysusb.describe(info["handle"])
             if self.must_block(dev) and dev.get("authorized", True) and self.block(dev, m):
                 continue
+            # Warn about read-tracking gap on FUSE-backed filesystems (ntfs-3g, exfat-fuse, etc.).
+            fuse_warn = " [warning: read events on %s are not tracked by the kernel; " \
+                        "mount with -t ntfs3 or exfat (kernel driver) to log reads]" % info["fs"] \
+                if info["fs"] in ("fuseblk", "fuse") else ""
             self.event("volume", "Mounted", serial=info["serial"], mount=m, path=m, dest=info["label"],
-                       detail="%s  %s  UUID %s" % (info["fs"], info["source"], info["uuid"] or "-"))
+                       detail="%s  %s  UUID %s%s" % (info["fs"], info["source"], info["uuid"] or "-", fuse_warn))
             w = TreeWatcher(m, self.file_emit(m, info["serial"]),
                             lambda files, m=m, s=info["serial"]: self.q.put(
                                 {"_kind": "snapshot", "mount": m, "serial": s, "files": files}),
@@ -540,6 +588,9 @@ class Daemon:
                     self.fan.mark(m)
                 except OSError as e:
                     log.warning("fanotify mark %s: %s", m, e)
+                    if info["fs"] in ("fuseblk", "fuse"):
+                        self.event("system", "Watch limit", mount=m, path=m,
+                                   detail="fanotify refused mark on %s (%s); reads will not be logged" % (m, info["fs"]))
             self.update_mount_row(m)
         self.db.commit()
 
@@ -575,12 +626,63 @@ class Daemon:
                     if w:
                         w.rescan_requested.set()
                     ok, msg = (True, "re-indexing %s" % a.get("mount")) if w else (False, "not a watched USB mount")
+                elif cmd == "unmount":
+                    ok, msg = self.cmd_unmount(a.get("mount", ""), a.get("serial", ""))
+                elif cmd == "force_block":
+                    ok, msg = self.cmd_force_block(a.get("serial", ""))
                 else:
                     ok, msg = False, "unknown command %r" % cmd
             except Exception as e:
                 ok, msg = False, str(e)
             self.db.execute("UPDATE commands SET done=?, ok=?, result=? WHERE id=?", (time.time(), 1 if ok else 0, msg, cid))
             self.db.commit()
+
+    def _drop_mount(self, m, serial, reason):
+        """Remove tracking state for a mountpoint the daemon has already surrendered."""
+        info = self.mounts.pop(m, None)
+        w = self.watchers.pop(m, None)
+        if w:
+            w.stop()
+        if self.fan:
+            try:
+                self.fan.mark(m, add=False)
+            except Exception:
+                pass
+        self.db.execute("DELETE FROM mounts WHERE mount=?", (m,))
+        self.event("volume", "Unmounted", serial=serial or (info or {}).get("serial", ""),
+                   mount=m, path=m, dest=(info or {}).get("label", ""), detail=reason)
+
+    def cmd_unmount(self, mount, serial):
+        """Force-unmount one path or every mount belonging to a serial. Needed on systems where
+        the desktop does not auto-mount and the admin wants to kick a stick without blocking it."""
+        targets = [mount] if mount else sysusb.mountpoints_for_serial(serial)
+        if not targets:
+            return False, "no matching mount found"
+        done, failed = [], []
+        for m in targets:
+            if sysusb.force_unmount(m):
+                done.append(m)
+                self._drop_mount(m, serial, "requested from console")
+            else:
+                failed.append(m)
+        self.db.commit()
+        if done and not failed:
+            return True, "unmounted " + ", ".join(done)
+        if done:
+            return True, "unmounted %s; failed %s" % (", ".join(done), ", ".join(failed))
+        return False, "umount failed for " + ", ".join(failed)
+
+    def cmd_force_block(self, serial):
+        """Re-run the block pipeline for a serial, bypassing the recent-block dedup window.
+        Useful when the admin is debugging 'blocked in UI but device still accessible'."""
+        if not serial:
+            return False, "serial required"
+        dev = next((d for d in self.attached.values() if (d["serial"] or "").upper() == serial.upper()), None)
+        if not dev:
+            return False, "device not attached"
+        self.recent_block.pop(dev["handle"], None)
+        ok = self.block(dev)
+        return ok, "block %s on %s" % ("fired" if ok else "failed", dev["handle"])
 
     def restore(self, vid):
         row = self.db.execute("SELECT serial,rel,vpath FROM vault WHERE id=?", (vid,)).fetchone()

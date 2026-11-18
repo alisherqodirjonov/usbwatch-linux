@@ -51,6 +51,11 @@ def serial_of(usbdir):
                                 _read(os.path.join(usbdir, "idProduct")))).upper()
 
 
+def vidpid_key(vid, pid):
+    """Policy key that matches every USB device with this vendor:product pair."""
+    return ("VIDPID-%s-%s" % (vid or "", pid or "")).upper()
+
+
 def _unescape(s):
     return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), s)
 
@@ -210,6 +215,82 @@ def set_enabled(handle, enable):
         return True
     except OSError:
         return False
+
+
+def mountpoints_for_serial(serial):
+    """Every currently-mounted path that belongs to the USB device with this serial."""
+    if not serial:
+        return []
+    want = serial.upper()
+    out = []
+    for src, mnt, _fs in mounts():
+        u = usb_of_source(src)
+        if u and serial_of(u).upper() == want:
+            out.append(mnt)
+    return out
+
+
+def ghost_mounts():
+    """Mounts that still appear in /proc/self/mounts but whose source block device is gone.
+    This happens after a lazy-unmount of a FUSE filesystem: the FUSE backend is dead but the
+    mount record lingers. ls'ing such a mount returns EIO."""
+    out = []
+    for src, mnt, fs in mounts():
+        if src.startswith("/dev/") and not os.path.exists(src):
+            out.append((src, mnt, fs))
+    return out
+
+
+def force_unmount(mnt):
+    """Lazy-unmount a filesystem so a blocked device can be torn off even while in use."""
+    try:
+        r = subprocess.run(["umount", "-l", mnt], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=15)
+        return r.returncode == 0 or not os.path.ismount(mnt)
+    except Exception:
+        return False
+
+
+def poweroff_port(handle):
+    """Let the kernel power-manage the USB port down (best-effort; silent if unsupported)."""
+    try:
+        with open(os.path.join(handle or "", "power", "control"), "w") as f:
+            f.write("auto")
+        return True
+    except OSError:
+        return False
+
+
+def _block_nodes_for_handle(handle):
+    """Whole-disk sysfs entries (/sys/block/sdX) that live under this USB device."""
+    real_handle = os.path.realpath(handle or "")
+    if not real_handle:
+        return []
+    out = []
+    for p in glob.glob("/sys/block/sd*"):
+        u = _usb_parent(p)
+        if u and os.path.realpath(u) == real_handle:
+            out.append(p)
+    return out
+
+
+def scsi_delete(handle):
+    """Tear block device entries out of the SCSI layer for every disk under this USB handle.
+
+    On some kernels writing authorized=0 to the USB device does not cascade down to the block
+    subsystem, so /dev/sdX stays visible and mountable. Writing 1 to the SCSI device's own
+    `delete` file makes the block node actually disappear. Returns the names that were dropped.
+    """
+    done = []
+    for p in _block_nodes_for_handle(handle):
+        delete = os.path.join(p, "device", "delete")
+        try:
+            with open(delete, "w") as f:
+                f.write("1")
+            done.append(os.path.basename(p))
+        except OSError:
+            pass
+    return done
 
 
 # --- device history (kernel log) ---

@@ -132,14 +132,19 @@ const pages = {
 
   async drives(quiet) {
     const my = gen;
-    const [rows, st] = await Promise.all([api("/api/devices"), api("/api/settings")]);
+    const [rows, st, policy] = await Promise.all([api("/api/devices"), api("/api/settings"), api("/api/policy")]);
     if (my !== gen) return;
     const search = quiet ? $("#dv-q")?.value || "" : "";
+    const models = policy.filter(p => (p.serial || "").toUpperCase().startsWith("VIDPID-"));
+    const modelKey = r => r.vid && r.pid ? `VIDPID-${r.vid}-${r.pid}`.toUpperCase() : "";
+    const modelRule = r => models.find(m => m.serial === modelKey(r));
     main.innerHTML = head("USB drives", `<div class="seg" id="dv-mode">${Object.entries(MODES).map(([k, [label]]) =>
         `<button data-m="${k}" class="${st.mode === k ? "on" : ""}">${label}</button>`).join("")}</div>`) +
       `<p class="muted">${esc(MODES[st.mode]?.[1] || "")}</p>
        <div class="row"><input id="dv-q" class="w240" placeholder="Search drives…" aria-label="search" value="${esc(search)}"></div>
-       <div class="tbl-wrap" id="dv"></div>`;
+       <div class="tbl-wrap" id="dv"></div>
+       ${models.length ? `<h2 class="section">Model rules <span class="muted small">(block every USB with the same VID:PID)</span></h2>
+       <div class="tbl-wrap" id="dv-models"></div>` : ""}`;
     const draw = () => {
       const q = $("#dv-q").value.toLowerCase();
       table($("#dv"), [
@@ -148,20 +153,60 @@ const pages = {
         { h: "Serial", f: r => `<span class="mono">${esc(r.serial)}</span>` },
         { h: "Size", f: r => fmtSize(r.total), cls: "nowrap" },
         { h: "Last seen", f: r => esc(r.last), cls: "nowrap" },
-        { h: "List", f: r => listPill(r.list) },
+        { h: "List", f: r => {
+            const rule = modelRule(r);
+            return listPill(r.list) + (rule ? ` <span class="pill block" title="Blocked via VID:PID ${esc(r.vid)}:${esc(r.pid)}">Model ${esc(rule.kind === "allow" ? "allowed" : "blocked")}</span>` : "");
+          } },
         { h: "", cls: "nowrap", f: r => (r.list !== "allow" ? `<button class="btn small" data-k="allow" data-s="${esc(r.serial)}">Allow</button> ` : "") +
             (r.list !== "block" ? `<button class="btn danger small" data-k="block" data-s="${esc(r.serial)}">Block</button> ` : "") +
+            (r.vid && r.pid ? (modelRule(r)
+                ? `<button class="btn ghost small" data-k="" data-m="${esc(r.vid)}:${esc(r.pid)}" title="Remove VID:PID rule ${esc(r.vid)}:${esc(r.pid)}">Unblock model</button> `
+                : `<button class="btn danger small" data-k="block" data-m="${esc(r.vid)}:${esc(r.pid)}" title="Block every USB with VID:PID ${esc(r.vid)}:${esc(r.pid)}">Block model</button> `) : "") +
+            (r.mounts ? `<button class="btn small" data-cmd="unmount" data-serial="${esc(r.serial)}" title="Unmount every filesystem on this drive">Unmount</button> ` : "") +
+            (r.connected && (r.list === "block" || modelRule(r)) ? `<button class="btn danger small" data-cmd="force_block" data-serial="${esc(r.serial)}" title="Re-run the block pipeline right now (force-unmount + SCSI delete + authorized=0)">Force block</button> ` : "") +
             (r.list ? `<button class="btn ghost small" data-k="" data-s="${esc(r.serial)}">Remove from list</button>` : "") },
       ], rows.filter(r => !q || `${r.name} ${r.label} ${r.serial}`.toLowerCase().includes(q)),
       { onClick: r => location.hash = `#/activity?serial=${encodeURIComponent(r.serial)}`, empty: "No USB drives seen yet. Plug one in." });
+      if (models.length) {
+        table($("#dv-models"), [
+          { h: "Model", f: m => `<b>${esc(m.name || m.serial)}</b>` },
+          { h: "VID:PID", f: m => `<span class="mono">${esc(m.serial.replace(/^VIDPID-/i, "").replace("-", ":").toLowerCase())}</span>` },
+          { h: "List", f: m => listPill(m.kind) },
+          { h: "", cls: "nowrap", f: m => `<button class="btn ghost small" data-k="" data-key="${esc(m.serial)}">Remove rule</button>` },
+        ], models, { empty: "" });
+      }
     };
     $("#dv-q").oninput = draw; draw();
     $("#dv").addEventListener("click", async e => {
-      const b = e.target.closest("button[data-s]"); if (!b) return;
-      const r = rows.find(x => x.serial === b.dataset.s);
+      const b = e.target.closest("button[data-s], button[data-m], button[data-cmd]"); if (!b) return;
+      if (b.dataset.cmd) {
+        try {
+          await api("/api/commands", { method: "POST", body: { cmd: b.dataset.cmd, args: { serial: b.dataset.serial } } });
+          toast(b.dataset.cmd === "unmount" ? "Unmount requested." : "Force-block requested.");
+          setTimeout(() => pages.drives(true), 1500);
+        } catch (err) { fail(err); }
+        return;
+      }
+      let key, name;
+      if (b.dataset.m) {
+        const [vid, pid] = b.dataset.m.split(":");
+        key = `VIDPID-${vid}-${pid}`.toUpperCase();
+        const r = rows.find(x => `${x.vid}:${x.pid}` === b.dataset.m);
+        name = `Any ${r?.name || "USB"} (${b.dataset.m})`;
+      } else {
+        const r = rows.find(x => x.serial === b.dataset.s);
+        key = r.serial; name = r.name;
+      }
       try {
-        await api("/api/policy", { method: "POST", body: { serials: [r.serial], names: { [r.serial]: r.name }, kind: b.dataset.k || null } });
+        await api("/api/policy", { method: "POST", body: { serials: [key], names: { [key]: name }, kind: b.dataset.k || null } });
         toast("Saved."); pages.drives(true);
+      } catch (err) { fail(err); }
+    });
+    $("#dv-models")?.addEventListener("click", async e => {
+      const b = e.target.closest("button[data-key]"); if (!b) return;
+      try {
+        await api("/api/policy", { method: "POST", body: { serials: [b.dataset.key], kind: null } });
+        toast("Rule removed."); pages.drives(true);
       } catch (err) { fail(err); }
     });
     $$("#dv-mode button").forEach(b => b.onclick = async () => {

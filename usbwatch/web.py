@@ -34,7 +34,7 @@ STATIC = {"app.js": "application/javascript; charset=utf-8", "style.css": "text/
           "index.html": "text/html; charset=utf-8"}
 COOKIE = "uw_session"
 MAX_BODY = 1 << 20
-COMMANDS = ("restore", "refresh_history", "rescan")
+COMMANDS = ("restore", "refresh_history", "rescan", "unmount", "force_block")
 ACTIONS = ("Connected", "Disconnected", "Mounted", "Unmounted", "Created", "Modified", "Read", "Executed",
            "Deleted", "Renamed/Moved", "Deleted (offline)", "Restored", "Blocked", "Block failed", "Unblocked",
            "Unblock failed", "Policy applied", "Watch limit", "Event overflow", "Service started", "Service stopped")
@@ -367,7 +367,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """Every USB drive seen so far (other USB devices are not shown)."""
         self.send_json(db.rows(self.app.conn(),
                                "SELECT d.*, p.kind list, b.ts blocked, "
-                               "(SELECT COUNT(*) FROM attached a WHERE a.serial=d.serial) connected "
+                               "(SELECT COUNT(*) FROM attached a WHERE a.serial=d.serial) connected, "
+                               "(SELECT GROUP_CONCAT(m.mount, '|') FROM mounts m WHERE m.serial=d.serial) mounts "
                                "FROM devices d LEFT JOIN policy p ON p.serial=d.serial "
                                "LEFT JOIN blocked b ON b.serial=d.serial WHERE d.storage=1 ORDER BY d.last DESC"))
 
@@ -516,8 +517,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if cmd not in COMMANDS:
             raise HttpError(400, "Unknown command")
         a = b.get("args") if isinstance(b.get("args"), dict) else {}
-        args = {"vid": int(a.get("vid") or 0)} if cmd == "restore" else \
-            {"mount": s(a.get("mount"), 4096)} if cmd == "rescan" else {}
+        if cmd == "restore":
+            args = {"vid": int(a.get("vid") or 0)}
+        elif cmd == "rescan":
+            args = {"mount": s(a.get("mount"), 4096)}
+        elif cmd == "unmount":
+            args = {"mount": s(a.get("mount"), 4096), "serial": s(a.get("serial"), 200).upper()}
+        elif cmd == "force_block":
+            args = {"serial": s(a.get("serial"), 200).upper()}
+        else:
+            args = {}
         c = self.app.conn()
         cur = c.execute("INSERT INTO commands(cmd,args,user,created) VALUES(?,?,?,?)",
                         (cmd, json.dumps(args), user, time.time()))
